@@ -9,3 +9,8 @@ export async function download(id,format){
  if(!r.ok)throw new Error('下载失败，请重试');
  const u=URL.createObjectURL(await r.blob()),a=document.createElement('a');a.href=u;a.download='分析归档-'+id+'.'+format;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
 }
+export async function downloadBlind(id){
+ const r=await fetch('/api/blind-reviews/'+id+'/export',{headers:{Authorization:'Bearer '+session.token}});
+ if(!r.ok){const d=await r.json().catch(()=>({detail:'下载失败，请重试'}));throw new Error(typeof d.detail==='string'?d.detail:JSON.stringify(d.detail));}
+ const u=URL.createObjectURL(await r.blob()),a=document.createElement('a');a.href=u;a.download='盲评揭榜-'+id+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
+}

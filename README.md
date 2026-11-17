@@ -5,6 +5,7 @@
 ## 模块与业务流程
 数据接入（JSON/CSV、字段验证、批次指纹）→ 参数化分析（异步 Python worker）→ 结果复核（指标、图形、明细、解释、批准）→ 定时分发（本地收件箱、CSV/JSON、SHA256）；另有业务总览和审计轨迹。
 三个贯穿全栈的实体：Dataset 数据批次、Job 分析任务、Report 分发计划；辅助 User、Audit、Delivery。
+盲评揭榜为独立验收闭环：BlindReview 封存调参/验收分组与参考标签，BlindCandidate 冻结候选参数；揭榜前验收标签与逐点结果对分析员隐藏（查询、下载同源脱敏），负责人发起后只评已冻结候选并整组公开，输出带内点对错误与孤立点误判，支持并发同次评估、中断恢复与半组不公开。详见 [BUSINESS.md](BUSINESS.md) 的「盲评揭榜」。
 
 ## 快速启动
 ```bash
@@ -29,7 +30,8 @@ Python 3.12 / FastAPI / SQLAlchemy / NumPy / SciPy / scikit-learn；PostgreSQL 1
 ## 目录与工程约定
 backend/src/{models,schemas,services,routes,controllers,middlewares,constants,config,utils}；backend/scripts/seed_demo.py；backend/migrations/initial.py。
 frontend/src/{api,stores,types,components/common,hooks,pages,router,utils,constants}。
-Role 枚举：admin/analyst/viewer；JobStatus：queued/running/completed/failed。后端 backend/src/constants/enums.py，前端 frontend/src/constants/enums.js；路由权限在 middlewares/auth.py；页面按相同角色控制操作入口。
+Role 枚举：admin/analyst/viewer；JobStatus：queued/running/completed/failed；BlindStatus：sealed/revealing/revealed；CandidateStatus：frozen/queued/running/done/failed。后端 backend/src/constants/enums.py，前端 frontend/src/constants/enums.js；路由权限在 middlewares/auth.py；页面按相同角色控制操作入口。
+盲评接口前缀 `/blind-reviews`：建盲评与登记冻结候选需 admin/analyst；发起揭榜、中断恢复仅 admin；列表/详情/逐点候选直查对所有登录角色开放但按揭榜状态脱敏；`/blind-reviews/{id}/export` 仅在整组揭榜后可下载，揭榜前返回 409 且记录 blind.export.blocked 审计。
 
 ## 环境变量与 Docker
 COMPOSE_PROJECT_NAME=rail-density；FRONTEND_PORT=18210；BACKEND_PORT=19210；DB_PORT=17710；DB_PASSWORD、JWT_SECRET 见 .env.example；SEED_DEMO 默认 true。共享命名产物卷供后端下载与 worker 写入，数据库/Redis 各持久卷。

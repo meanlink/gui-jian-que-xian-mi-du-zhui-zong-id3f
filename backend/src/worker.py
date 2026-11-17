@@ -4,9 +4,10 @@ from sqlalchemy import select
 from redis import Redis
 from src.config.database import Session
 from src.config.settings import REDIS_URL
-from src.models import Job, Dataset, Report
+from src.models import Job, Dataset, Report, BlindReview, BlindCandidate
 from src.services.business import analyze
 from src.services.reports import deliver
+from src.services import blind
 from src.services.audit import record
 logging.basicConfig(level=logging.INFO)
 def execute(job_id):
@@ -29,6 +30,13 @@ def tick():
     with Session() as db:
         queued=list(db.scalars(select(Job.id).where(Job.status=='queued').limit(3)))
     for job_id in queued:execute(job_id)
+    # 盲评揭榜中断恢复：只补算排队/评估中的候选，已完成候选不重复计分
+    with Session() as db:
+        for review in db.scalars(select(BlindReview).where(BlindReview.status=='revealing')):
+            for cand in blind.review_candidates(db, review.id):
+                if cand.status in ('queued','running'):
+                    blind.evaluate_candidate(db, cand.id)
+            blind.finalize_if_complete(db, review.id)
     with Session() as db:
         for r in db.scalars(select(Report).where(Report.enabled==True,Report.next_run<=time.time())):
             d=deliver(db,r)
@@ -40,6 +48,9 @@ def main():
     with Session() as db:
         for j in db.scalars(select(Job).where(Job.status=='running')):
             j.status='queued';record(db,'worker','job.recovered',{'id':j.id})
+        # 盲评评估中断：running 候选回到 queued，done 候选保持不变、不重复计分
+        for c in db.scalars(select(BlindCandidate).where(BlindCandidate.status=='running')):
+            c.status='queued';record(db,'worker','blind.candidate.recovered',{'id':c.id})
         db.commit()
     while True:
         Path('/tmp/heartbeat').touch()
